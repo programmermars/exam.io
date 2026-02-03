@@ -42,7 +42,7 @@ You do not need Node.js or a backend server. This project runs directly in the b
 
 1.  **Clone the Repository**
     ```bash
-    git clone [https://github.com/yourusername/academic-omni-tutor.git](https://github.com/yourusername/academic-omni-tutor.git)
+    git clone [https://github.com/programmermars/exam.io.git](https://github.com/programmermars/exam.io.git)
     ```
 2.  **Open the App**
     * Navigate to the folder.
