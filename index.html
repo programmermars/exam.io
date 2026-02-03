@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academic Omni-Tutor</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: #f8fafc; }
+        .fade-in { animation: fadeIn 0.4s ease-out; }
+        .slide-up { animation: slideUp 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        
+        /* Specialized Styling */
+        .math-block { background: rgba(241, 245, 249, 0.8); border-left: 4px solid #6366f1; padding: 1rem; margin: 1rem 0; font-family: 'Courier New', serif; color: #1e293b; overflow-x: auto; }
+        .loader { width: 16px; height: 16px; border: 2px solid #cbd5e1; border-top-color: #6366f1; border-radius: 50%; animation: spin 0.8s linear infinite; display: inline-block; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Module Themes */
+        .theme-mv { --primary: #4f46e5; --bg: #eef2ff; --border: #c7d2fe; }   /* Indigo */
+        .theme-eco { --primary: #0ea5e9; --bg: #e0f2fe; --border: #bae6fd; }  /* Sky Blue */
+        .theme-np { --primary: #10b981; --bg: #ecfdf5; --border: #a7f3d0; }   /* Emerald */
+    </style>
+</head>
+<body class="min-h-screen flex flex-col items-center text-slate-800">
+
+    <nav class="w-full bg-white border-b border-slate-200 px-6 py-4 flex items-center justify-between sticky top-0 z-50 shadow-sm">
+        <div class="flex items-center gap-2 cursor-pointer" onclick="goGlobalHome()">
+            <div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center shadow-lg text-white font-bold">A</div>
+            <span class="font-black text-lg tracking-tighter">OMNI <span class="text-slate-500">TUTOR</span></span>
+        </div>
+        <div id="module-indicator" class="hidden md:block text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded bg-slate-100 text-slate-500">Select Module</div>
+    </nav>
+
+    <div id="api-panel" class="w-full max-w-3xl bg-white rounded-xl shadow-sm border border-slate-200 p-6 my-6 mx-4 transition-all">
+        <div class="flex flex-col gap-4">
+            <div class="flex items-center gap-3 border-b border-slate-100 pb-4">
+                <div class="p-2 bg-slate-100 rounded-lg text-slate-600">🤖</div>
+                <div class="flex-1">
+                    <h3 class="font-bold text-slate-800">AI Connection</h3>
+                    <p id="status-text" class="text-sm text-slate-500">Connect Gemini API for smart explanations</p>
+                </div>
+                <div id="connected-badge" class="hidden px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-bold">Active</div>
+            </div>
+            
+            <div id="step-1" class="flex flex-col md:flex-row gap-3">
+                <input type="password" id="api-input" placeholder="Paste Gemini API Key..." class="flex-1 border border-slate-300 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-500 transition shadow-sm">
+                <button onclick="fetchModels()" id="fetch-btn" class="bg-slate-900 hover:bg-slate-800 text-white font-bold py-3 px-6 rounded-lg transition whitespace-nowrap">Get Models</button>
+            </div>
+
+            <div id="step-2" class="hidden flex-col gap-3">
+                <div class="flex flex-col md:flex-row gap-3">
+                    <select id="model-select" class="flex-1 bg-white border border-slate-300 py-3 px-4 rounded-lg focus:outline-none focus:ring-2 focus:ring-slate-500"></select>
+                    <button id="connect-btn" onclick="saveConnection()" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-8 rounded-lg transition">Connect</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <main id="app-root" class="w-full max-w-5xl px-4 pb-20 flex flex-col items-center min-h-[500px]">
+        </main>
+
+    <script>
+        // --- DATA REPOSITORIES ---
+        
+        const DATA = {
+            mv: {
+                title: "Multivariate Stats",
+                color: "indigo",
+                mcq: [
+                    { id: 1, topic: "PCA", q: "The main objective of Principal Component Analysis (PCA) is to:", opts: ["Predict dependent variables.", "Reduce dimensionality while retaining variance.", "Cluster data.", "Eliminate correlation."], ans: 1, exp: "Captures core info into smaller set of PCs. " },
+                    { id: 2, topic: "PCA", q: "In a scree plot, the 'elbow' point indicates:", opts: ["Max variance.", "Number of components to retain.", "Outliers.", "Correlation."], ans: 1, exp: "Point where eigenvalues level off. " },
+                    { id: 3, topic: "MANOVA", q: "Wilks' Lambda tests:", opts: ["Homogeneity.", "Normality.", "Group differences on combined DVs.", "Correlation."], ans: 2, exp: "Tests if group centroids differ in multidimensional space." },
+                    { id: 4, topic: "Factor Analysis", q: "Communality ($h^2$) refers to:", opts: ["Unique variance.", "Total variance.", "Shared variance explained by factors.", "Error variance."], ans: 2, exp: "Sum of squared loadings for a variable." },
+                    { id: 5, topic: "Discriminant", q: "LDA assumes:", opts: ["Unequal covariance.", "Multivariate Normality & Equal Covariance.", "Non-linear data.", "Categorical predictors."], ans: 1, exp: "Requires homogeneous covariance matrices (Box's M)." },
+                    { id: 6, topic: "Biplot", q: "In a Biplot, arrow length represents:", opts: ["Mean.", "Variance representation quality.", "Standard Deviation.", "Count."], ans: 1, exp: "Longer arrows = better representation on the axes. " }
+                ],
+                subj: [
+                    { id: 's1', topic: "Fuel Efficiency PCA", marks: "20m", q: "An experiment estimates fuel efficiency. $\\sigma_{true}=0.5$, $\\sigma_{err}=0.1$. Compute Covariance Matrix.", ans: "1. **Variance:** $0.5^2 + 0.1^2 = 0.26$.\n2. **Covariance:** Only true variance is shared = $0.25$.\n3. **Matrix:** $\\begin{bmatrix} 0.26 & 0.25 \\\\ 0.25 & 0.26 \\end{bmatrix}$" },
+                    { id: 's2', topic: "Classification Rule", marks: "15m", q: "Define the Linear Discriminant classification rule for two groups.", ans: "Calculate score $L(x) = x' S_{pooled}^{-1} (\\bar{x}_1 - \\bar{x}_2)$.\nCompare to cutoff $m$. If $L(x) > m$, assign to Group 1.\n" }
+                ]
+            },
+            eco: {
+                title: "Economics",
+                color: "sky",
+                mcq: [
+                    { id: 101, topic: "S&D", q: "The 'Law of Demand' states:", opts: ["Price up, Qty up.", "Price down, Qty up.", "Income up, Demand up.", "Price up, Supply down."], ans: 1, exp: "Inverse relationship between Price and Qty Demanded. " },
+                    { id: 102, topic: "Elasticity", q: "If PED > 1, demand is:", opts: ["Inelastic.", "Unit Elastic.", "Elastic.", "Perfectly Inelastic."], ans: 2, exp: "Consumers are sensitive to price changes." },
+                    { id: 103, topic: "Macro", q: "GDP measures:", opts: ["Total income and total expenditure.", "Just income.", "Just expenditure.", "Gold reserves."], ans: 0, exp: "Market value of all final goods produced." },
+                    { id: 104, topic: "Market Failure", q: "A negative externality results in:", opts: ["Market equilibrium.", "Over-production.", "Under-production.", "Lower prices."], ans: 1, exp: "Social cost > Private cost. " },
+                    { id: 105, topic: "Costs", q: "Opportunity Cost is:", opts: ["Price paid.", "Best alternative forgone.", "Production cost.", "Sunk cost."], ans: 1, exp: "Value of the next best option." }
+                ],
+                subj: [
+                    { id: 'e1', topic: "Market Shifts", marks: "10m", q: "Coffee study shows health benefits. Describe market shift.", ans: "1. **Demand Curve** shifts **Right** (Tastes/Preferences).\n2. **Equilibrium Price** increases.\n3. **Equilibrium Quantity** increases.\n" },
+                    { id: 'e2', topic: "Price Floor", marks: "10m", q: "Government sets Price Floor above equilibrium. What happens?", ans: "1. Qty Supplied > Qty Demanded.\n2. Result: **Surplus**.\n3. Deadweight loss occurs.\n" }
+                ]
+            },
+            np: {
+                title: "Non-Parametric",
+                color: "emerald",
+                mcq: [
+                    { id: 201, topic: "Concept", q: "Non-parametric tests are used when:", opts: ["Data is normal.", "N is large.", "Data is skewed/Ordinal.", "Variance is known."], ans: 2, exp: "Distribution-free tests. " },
+                    { id: 202, topic: "Tests", q: "Alternative to Independent T-Test:", opts: ["Wilcoxon Signed-Rank.", "Mann-Whitney U.", "Kruskal-Wallis.", "Spearman."], ans: 1, exp: "Compares ranks between two independent groups." },
+                    { id: 203, topic: "Sign Test", q: "The Sign Test evaluates:", opts: ["Magnitude.", "Direction (+/-).", "Variance.", "Mean."], ans: 1, exp: "Focuses on median difference." },
+                    { id: 204, topic: "Correlation", q: "Spearman's Rho measures:", opts: ["Linearity.", "Monotonic relationship.", "Causality.", "Normality."], ans: 1, exp: "Rank-based correlation. " }
+                ],
+                subj: [
+                    { id: 'n1', topic: "Ranking Data", marks: "5m", q: "Rank: {5, 8, 8, 12, 20}. Handle ties.", ans: "5 -> 1\n8, 8 -> (2+3)/2 = **2.5**\n12 -> 4\n20 -> 5\nFinal: 1, 2.5, 2.5, 4, 5. " },
+                    { id: 'n2', topic: "Mann-Whitney U", marks: "10m", q: "Group A (n=3), Group B (n=2). Ranks for B are 1 and 3. Calc U for B.", ans: "$R_B = 1+3=4$.\n$U = n_1 n_2 + \\frac{n_2(n_2+1)}{2} - R_B$\n$U = (3)(2) + \\frac{2(3)}{2} - 4$\n$U = 6 + 3 - 4 = 5$." }
+                ]
+            }
+        };
+
+        // --- STATE MANAGEMENT ---
+        const AppState = {
+            view: 'global_home', // global_home, module_home, mcq, subjective, results
+            module: null, // mv, eco, np
+            mcqPage: 0,
+            subPage: 0,
+            answers: {},
+            mcqAiCache: {},
+            subAiCache: {},
+            expandedExplanations: {},
+            isExplaining: false
+        };
+
+        const QUESTIONS_PER_PAGE = 5;
+        let globalKey = localStorage.getItem('geminiKey');
+        let globalModel = localStorage.getItem('geminiModel');
+
+        window.onload = function() {
+            if (globalKey && globalModel) {
+                document.getElementById('api-panel').classList.add('hidden');
+                document.getElementById('connected-badge').classList.remove('hidden');
+                document.getElementById('connected-badge').innerText = `AI: ${globalModel.replace('models/','')}`;
+            }
+            renderApp();
+        };
+
+        // --- NAVIGATION & RENDERING ---
+
+        function goGlobalHome() {
+            AppState.view = 'global_home';
+            AppState.module = null;
+            renderApp();
+        }
+
+        function selectModule(modKey) {
+            AppState.module = modKey;
+            AppState.view = 'module_home';
+            renderApp();
+        }
+
+        function renderApp() {
+            const root = document.getElementById('app-root');
+            const ind = document.getElementById('module-indicator');
+            root.innerHTML = '';
+            
+            // Update Navbar Indicator
+            if (AppState.module) {
+                const title = DATA[AppState.module].title;
+                const color = DATA[AppState.module].color;
+                ind.innerText = title;
+                ind.className = `hidden md:block text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded bg-${color}-50 text-${color}-600 border border-${color}-200`;
+            } else {
+                ind.innerText = "SELECT MODULE";
+                ind.className = "hidden md:block text-[10px] font-black uppercase tracking-[0.2em] px-3 py-1 rounded bg-slate-100 text-slate-500";
+            }
+
+            switch(AppState.view) {
+                case 'global_home': renderGlobalHome(root); break;
+                case 'module_home': renderModuleHome(root); break;
+                case 'mcq': renderMCQ(root); break;
+                case 'subjective': renderSubjective(root); break;
+                case 'results': renderResults(root); break;
+            }
+        }
+
+        function renderGlobalHome(container) {
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center space-y-8 p-4 mt-8 fade-in w-full">
+                    <div class="text-center space-y-2">
+                        <h1 class="text-4xl font-black text-slate-900 tracking-tight">Academic Omni-Tutor</h1>
+                        <p class="text-slate-500 text-lg">Select a discipline to begin practice.</p>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6 w-full max-w-5xl">
+                        <button onclick="selectModule('mv')" class="group relative overflow-hidden bg-white p-8 rounded-[2rem] border border-slate-200 hover:border-indigo-500 hover:shadow-xl hover:-translate-y-1 transition-all text-left">
+                            <div class="absolute top-0 left-0 w-full h-1 bg-indigo-500"></div>
+                            <div class="w-12 h-12 bg-indigo-100 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition">🔮</div>
+                            <h2 class="text-xl font-bold text-slate-800 mb-2">Multivariate</h2>
+                            <p class="text-xs text-slate-500 leading-relaxed">PCA, Factor Analysis, MANOVA, Discriminant Analysis.</p>
+                        </button>
+
+                        <button onclick="selectModule('eco')" class="group relative overflow-hidden bg-white p-8 rounded-[2rem] border border-slate-200 hover:border-sky-500 hover:shadow-xl hover:-translate-y-1 transition-all text-left">
+                            <div class="absolute top-0 left-0 w-full h-1 bg-sky-500"></div>
+                            <div class="w-12 h-12 bg-sky-100 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition">📈</div>
+                            <h2 class="text-xl font-bold text-slate-800 mb-2">Economics</h2>
+                            <p class="text-xs text-slate-500 leading-relaxed">Micro/Macro, Supply & Demand, Elasticity, GDP.</p>
+                        </button>
+
+                        <button onclick="selectModule('np')" class="group relative overflow-hidden bg-white p-8 rounded-[2rem] border border-slate-200 hover:border-emerald-500 hover:shadow-xl hover:-translate-y-1 transition-all text-left">
+                            <div class="absolute top-0 left-0 w-full h-1 bg-emerald-500"></div>
+                            <div class="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center mb-4 text-2xl group-hover:scale-110 transition">📊</div>
+                            <h2 class="text-xl font-bold text-slate-800 mb-2">Non-Parametric</h2>
+                            <p class="text-xs text-slate-500 leading-relaxed">Rank tests, Sign Test, Mann-Whitney, Spearman.</p>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderModuleHome(container) {
+            const m = DATA[AppState.module];
+            container.innerHTML = `
+                <div class="w-full max-w-3xl fade-in mt-8">
+                    <button onclick="goGlobalHome()" class="mb-6 text-xs font-bold text-slate-400 hover:text-slate-700 flex items-center gap-1">← BACK TO MENU</button>
+                    <div class="bg-white p-10 rounded-[2.5rem] border border-slate-200 shadow-sm text-center">
+                        <h1 class="text-3xl font-black text-slate-900 mb-2">${m.title}</h1>
+                        <p class="text-slate-500 text-sm mb-8">Choose your assessment mode</p>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <button onclick="AppState.view='mcq'; AppState.mcqPage=0; renderApp()" class="p-6 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-${m.color}-50 hover:border-${m.color}-200 transition group">
+                                <div class="font-bold text-lg text-slate-800 group-hover:text-${m.color}-600">Objective Quiz</div>
+                                <div class="text-xs text-slate-400 mt-1">${m.mcq.length} Questions</div>
+                            </button>
+                            <button onclick="AppState.view='subjective'; AppState.subPage=0; renderApp()" class="p-6 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-${m.color}-50 hover:border-${m.color}-200 transition group">
+                                <div class="font-bold text-lg text-slate-800 group-hover:text-${m.color}-600">Case Studies</div>
+                                <div class="text-xs text-slate-400 mt-1">${m.subj.length} Scenarios</div>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMCQ(container) {
+            const mData = DATA[AppState.module];
+            const questions = mData.mcq;
+            const start = AppState.mcqPage * QUESTIONS_PER_PAGE;
+            const chunk = questions.slice(start, start + QUESTIONS_PER_PAGE);
+            const totalPages = Math.ceil(questions.length / QUESTIONS_PER_PAGE);
+
+            let html = `
+                <div class="w-full max-w-2xl space-y-6 fade-in mt-4">
+                    <div class="flex justify-between items-center">
+                        <button onclick="AppState.view='module_home'; renderApp()" class="text-xs font-bold text-slate-400 hover:text-slate-800">← EXIT</button>
+                        <span class="text-[10px] font-black uppercase text-${mData.color}-500 bg-${mData.color}-50 px-2 py-1 rounded">Page ${AppState.mcqPage+1}/${totalPages}</span>
+                    </div>
+            `;
+
+            chunk.forEach(q => {
+                const isAns = AppState.answers[q.id] !== undefined;
+                const showExp = AppState.expandedExplanations[q.id];
+                const aiText = AppState.mcqAiCache[q.id];
+
+                let opts = q.opts.map((o, i) => {
+                    let style = `border-slate-100 hover:bg-${mData.color}-50 hover:border-${mData.color}-200 text-slate-600`;
+                    if(isAns) {
+                        if(i === q.ans) style = "bg-green-50 border-green-500 font-bold text-green-800";
+                        else if(i === AppState.answers[q.id]) style = "bg-red-50 border-red-400 text-red-800";
+                        else style = "opacity-40 border-slate-100";
+                    }
+                    return `<button onclick="handleAns(${q.id}, ${i})" ${isAns?'disabled':''} class="w-full text-left p-3 rounded-xl border text-sm transition-all ${style}">${o}</button>`;
+                }).join('');
+
+                html += `
+                    <div class="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+                        <div class="flex justify-between mb-2"><span class="text-[10px] font-bold text-slate-400 uppercase tracking-wide">${q.topic}</span></div>
+                        <h3 class="font-bold text-slate-800 mb-4 text-lg">${parseText(q.q)}</h3>
+                        <div class="space-y-2 mb-4">${opts}</div>
+                        ${isAns ? `
+                            <div class="pt-4 border-t border-slate-50 flex gap-4">
+                                <button onclick="toggleExp(${q.id})" class="text-xs font-bold text-slate-400 hover:text-${mData.color}-600">${showExp?'Hide':'Show'} Explain</button>
+                                <button onclick="askAI('mcq', ${q.id})" class="text-xs font-bold text-purple-400 hover:text-purple-600 flex items-center gap-1">✨ AI Tutor</button>
+                            </div>
+                            ${showExp ? `<div class="mt-3 p-4 bg-slate-50 rounded-xl text-xs text-slate-600 leading-relaxed border border-slate-100 slide-up">${parseText(q.exp)}</div>` : ''}
+                            ${aiText ? `<div class="mt-3 p-4 bg-purple-50 rounded-xl text-xs text-purple-900 leading-relaxed border border-purple-100 slide-up relative"><span class="absolute top-2 right-2 text-[9px] font-bold opacity-50">GEMINI</span>${parseText(aiText)}</div>` : ''}
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            html += `
+                <div class="flex justify-between pt-4 pb-12">
+                    <button onclick="AppState.mcqPage--; renderApp()" ${AppState.mcqPage===0?'disabled class="opacity-0"':''} class="text-xs font-bold text-slate-400">PREV</button>
+                    <button onclick="${AppState.mcqPage < totalPages-1 ? 'AppState.mcqPage++' : "AppState.view='results'"}; renderApp()" class="px-6 py-2 bg-slate-900 text-white rounded-lg font-bold text-xs shadow-lg hover:bg-slate-800">${AppState.mcqPage===totalPages-1?'FINISH':'NEXT'}</button>
+                </div></div>
+            `;
+            container.innerHTML = html;
+        }
+
+        function renderSubjective(container) {
+            const mData = DATA[AppState.module];
+            const q = mData.subj[AppState.subPage];
+            const aiText = AppState.subAiCache[q.id];
+
+            container.innerHTML = `
+                <div class="w-full max-w-3xl fade-in mt-4">
+                    <div class="flex items-center justify-between mb-4">
+                        <button onclick="AppState.view='module_home'; renderApp()" class="text-xs font-bold text-slate-400 hover:text-slate-800">← EXIT</button>
+                        <span class="text-[10px] font-black uppercase text-${mData.color}-500 tracking-widest">Case ${AppState.subPage+1} / ${mData.subj.length}</span>
+                    </div>
+                    
+                    <div class="bg-white border border-slate-200 rounded-[2rem] shadow-sm overflow-hidden">
+                        <div class="bg-${mData.color}-50 px-8 py-4 border-b border-${mData.color}-100 flex justify-between items-center">
+                            <span class="font-bold text-${mData.color}-800 text-sm uppercase tracking-wide">${q.topic}</span>
+                            <span class="bg-white px-2 py-1 rounded text-[10px] font-black text-${mData.color}-600 shadow-sm">${q.marks}</span>
+                        </div>
+                        <div class="p-8">
+                            <div class="text-lg text-slate-800 font-medium leading-relaxed mb-8">${parseText(q.q)}</div>
+                            
+                            <div class="flex gap-3 mb-6">
+                                <button onclick="document.getElementById('sol-${q.id}').classList.toggle('hidden')" class="flex-1 py-3 bg-slate-100 text-slate-600 font-bold rounded-xl text-xs hover:bg-slate-200 transition">REVEAL SOLUTION</button>
+                                <button onclick="askAI('subj', '${q.id}')" class="px-6 py-3 bg-purple-50 text-purple-600 font-bold rounded-xl text-xs hover:bg-purple-100 transition flex items-center gap-2 border border-purple-100">
+                                    ${AppState.isExplaining ? '<span class="loader"></span>' : '✨ AI EXPLAIN'}
+                                </button>
+                            </div>
+
+                            <div id="sol-${q.id}" class="hidden p-6 bg-slate-50 border border-slate-100 rounded-2xl text-slate-700 text-sm leading-loose slide-up">
+                                ${parseText(q.ans)}
+                            </div>
+
+                            ${aiText ? `
+                                <div class="mt-6 p-6 bg-purple-50/50 border border-purple-100 rounded-2xl text-slate-700 text-sm leading-loose slide-up relative">
+                                    <div class="absolute -top-3 left-6 bg-purple-100 text-purple-700 px-2 py-1 rounded text-[9px] font-bold uppercase tracking-widest">AI Tutor</div>
+                                    ${parseText(aiText)}
+                                </div>
+                            ` : ''}
+                        </div>
+                    </div>
+
+                    <div class="flex justify-between pt-6 pb-12">
+                        <button onclick="AppState.subPage--; renderApp()" ${AppState.subPage===0?'disabled class="opacity-0"':''} class="px-4 py-2 text-xs font-bold text-slate-400">PREV CASE</button>
+                        <button onclick="${AppState.subPage < mData.subj.length-1 ? 'AppState.subPage++' : "AppState.view='module_home'"}; renderApp()" class="px-6 py-2 bg-${mData.color}-600 text-white rounded-lg font-bold text-xs shadow-lg hover:bg-${mData.color}-700">${AppState.subPage===mData.subj.length-1 ? 'FINISH' : 'NEXT CASE'}</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderResults(container) {
+            const mData = DATA[AppState.module];
+            const questions = mData.mcq;
+            const score = Object.entries(AppState.answers).reduce((acc, [k, v]) => {
+                const q = questions.find(x => x.id == k);
+                return acc + (q && q.ans === v ? 1 : 0);
+            }, 0);
+            const perc = Math.round((score/questions.length)*100);
+
+            container.innerHTML = `
+                <div class="flex flex-col items-center justify-center pt-12 slide-up">
+                    <div class="bg-white p-12 rounded-[2.5rem] shadow-xl border border-slate-100 text-center max-w-sm w-full">
+                        <div class="text-6xl mb-2">🎉</div>
+                        <h2 class="text-2xl font-black text-slate-800 uppercase mb-6">Quiz Complete</h2>
+                        <div class="text-5xl font-black text-${mData.color}-600 mb-2">${perc}%</div>
+                        <p class="text-slate-400 text-xs font-bold uppercase tracking-widest mb-8">${score} / ${questions.length} Correct</p>
+                        <button onclick="AppState.answers={}; AppState.mcqPage=0; AppState.view='mcq'; renderApp()" class="w-full py-4 bg-slate-900 text-white rounded-xl font-bold text-xs shadow-lg hover:scale-[1.02] transition">RETRY QUIZ</button>
+                        <button onclick="goGlobalHome()" class="mt-4 text-xs font-bold text-slate-400 hover:text-slate-800">BACK TO MENU</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        // --- UTILS & LOGIC ---
+
+        function handleAns(id, opt) { AppState.answers[id] = opt; renderApp(); }
+        function toggleExp(id) { AppState.expandedExplanations[id] = !AppState.expandedExplanations[id]; renderApp(); }
+
+        function parseText(text) {
+            if(!text) return '';
+            // Basic Markdown Parsing
+            let html = marked.parse(text);
+            // Math Injection
+            html = html.replace(/\$\$([\s\S]+?)\$\$/g, '<div class="math-block">$1</div>');
+            html = html.replace(/\$([^$]+)\$/g, '<span class="math-inline">$1</span>');
+            return html;
+        }
+
+        // --- API HANDLERS (Same as template but consolidated) ---
+        async function fetchModels() {
+            const input = document.getElementById('api-input');
+            const btn = document.getElementById('fetch-btn');
+            if(input.value.length < 10) return alert("Invalid Key");
+            btn.innerText = "Loading...";
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${input.value}`);
+                const data = await res.json();
+                const select = document.getElementById('model-select');
+                select.innerHTML = "";
+                data.models.filter(m => m.supportedGenerationMethods.includes("generateContent")).forEach(m => {
+                    select.innerHTML += `<option value="${m.name}">${m.displayName}</option>`;
+                });
+                document.getElementById('step-1').classList.add('hidden');
+                document.getElementById('step-2').classList.remove('hidden');
+                document.getElementById('step-2').classList.add('flex');
+                globalKey = input.value;
+            } catch(e) { alert("Error connecting"); } finally { btn.innerText = "Get Models"; }
+        }
+
+        function saveConnection() {
+            globalModel = document.getElementById('model-select').value;
+            localStorage.setItem('geminiKey', globalKey);
+            localStorage.setItem('geminiModel', globalModel);
+            location.reload();
+        }
+
+        async function askAI(mode, id) {
+            if(!globalKey) return alert("Please connect API first.");
+            AppState.isExplaining = true; renderApp();
+            
+            const mData = DATA[AppState.module];
+            const q = mode === 'mcq' ? mData.mcq.find(x => x.id === id) : mData.subj.find(x => x.id === id);
+            
+            const prompt = `Act as a university professor in ${mData.title}. Explain this concept clearly.
+            Question: ${q.q}
+            ${mode === 'mcq' ? `Answer: ${q.opts[q.ans]}` : `Solution: ${q.ans}`}
+            Instructions: Use bullet points. If helpful, mention what a visual diagram would look like.`;
+
+            try {
+                const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/${globalModel}:generateContent?key=${globalKey}`, {
+                    method: 'POST', headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                });
+                const data = await res.json();
+                const text = data.candidates[0].content.parts[0].text;
+                if(mode === 'mcq') AppState.mcqAiCache[id] = text;
+                else AppState.subAiCache[id] = text;
+            } catch(e) { alert("AI Error"); }
+            AppState.isExplaining = false; renderApp();
+        }
+    </script>
+</body>
+</html>
