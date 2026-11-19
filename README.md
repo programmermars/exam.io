@@ -42,7 +42,7 @@ You do not need Node.js or a backend server. This project runs directly in the b
 
 1.  **Clone the Repository**
     ```bash
-    git clone [https://github.com/programmermars/exam.io.git](https://github.com/programmermars/exam.io.git)
+    git clone https://github.com/programmermars/exam.io.git
     ```
 2.  **Open the App**
     * Navigate to the folder.
@@ -53,7 +53,9 @@ To enable the AI features:
 1.  Get a free API Key from [Google AI Studio](https://aistudio.google.com/).
 2.  Launch the app.
 3.  Click the **Connect AI** button in the navbar.
-4.  Paste your key, click **Find Models**, and select `gemini-1.5-flash` (recommended for speed) or `gemini-1.5-pro`.
+4.  Paste your key, click **Find Models**, and select a model from the list (a Flash model is recommended for speed).
+
+The key is stored only in your browser (`localStorage`) and is sent directly to the Gemini API. No key is included in this repository.
 
 ## 🧩 Modules Breakdown
 
